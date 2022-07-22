@@ -13,7 +13,7 @@ use futures::StreamExt;
 use objc::runtime::{objc_retain, Object, Sel, NO};
 use objc::{class, msg_send, sel, sel_impl};
 use std::collections::HashMap;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
 fn main() -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -66,11 +66,12 @@ async fn worker() -> Result<()> {
 
     let monitor = sys::net::Monitor::new().await?;
 
+    let mut if_hist = HashMap::new();
     let mut hist_in = Historical::new();
     let mut hist_out = Historical::new();
 
     let mut interval = interval(Duration::from_secs(1));
-    let mut map = HashMap::new();
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         interval.tick().await;
@@ -88,7 +89,7 @@ async fn worker() -> Result<()> {
                 }
             };
 
-            let (hist_in, hist_out) = map
+            let (hist_in, hist_out) = if_hist
                 .entry(stat.name)
                 .or_insert_with_key(|_| (Historical::new(), Historical::new()));
             if let Some(diff) = hist_in.push(stat.in_bytes) {
