@@ -1,16 +1,5 @@
-[package]
-name = "shinobu"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.58"
-cocoa = "0.24.0"
-core-foundation = "0.9.3"
-core-foundation-sys = "0.8.3"
-futures = { version = "0.3.21", default-features = false, features = ["std"] }
-libc = "0.2.126"
-objc = "0.2.7"
-tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "time"] }
+[workspace]
+members = [
+  "shinobu",
+  "launcher",
+]
