@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+main() {
+  CARGO_OPTS=(bundle)
+  PROFILE=debug
+
+  while getopts r OPT; do
+    case $OPT in
+      r)
+        CARGO_OPTS+=(--release)
+        PROFILE=release
+        ;;
+    esac
+  done
+
+  for PKG in shinobu launcher; do
+    cd $PKG
+    cargo "${CARGO_OPTS[@]}"
+    cd ..
+  done
+
+  cd target/$PROFILE/bundle/osx/Shinobu.app
+  mkdir -p Contents/Library/LoginItems
+  mv ../Launcher.app Contents/Library/LoginItems
+}
+
+[[ ${#BASH_SOURCE[@]} = 1 ]] && main "$@"
