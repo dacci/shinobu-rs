@@ -146,15 +146,26 @@ pub mod net {
         type Item = &'a libc::if_msghdr2;
 
         fn next(&mut self) -> Option<Self::Item> {
+            #[inline]
+            fn has_flag(flags: libc::c_int, bits: libc::c_int) -> bool {
+                flags & bits == bits
+            }
+
             while self.pos < self.buf.len() {
                 let msg = unsafe { self.buf.as_ptr().add(self.pos) } as *const libc::if_msghdr2;
                 let msg = unsafe { msg.as_ref() }.unwrap();
 
                 self.pos += msg.ifm_msglen as usize;
 
-                if msg.ifm_type == libc::RTM_IFINFO2 as _ {
-                    return Some(msg);
+                if msg.ifm_type != libc::RTM_IFINFO2 as _ {
+                    continue;
                 }
+
+                if has_flag(msg.ifm_flags, libc::IFF_LOOPBACK) {
+                    continue;
+                }
+
+                return Some(msg);
             }
 
             None
