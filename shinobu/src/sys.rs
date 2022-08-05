@@ -155,6 +155,9 @@ pub mod net {
                 let msg = unsafe { self.buf.as_ptr().add(self.pos) } as *const libc::if_msghdr2;
                 let msg = unsafe { msg.as_ref() }.unwrap();
 
+                if msg.ifm_msglen == 0 {
+                    break;
+                }
                 self.pos += msg.ifm_msglen as usize;
 
                 if msg.ifm_type != libc::RTM_IFINFO2 as _ {
