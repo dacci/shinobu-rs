@@ -16,12 +16,15 @@ use core_foundation_sys::base::Boolean;
 use core_foundation_sys::string::CFStringRef;
 use data::Historical;
 use futures::StreamExt;
+use log::{debug, info, warn};
 use objc::runtime::{objc_retain, Object, Sel, BOOL, NO, YES};
 use objc::{class, msg_send, sel, sel_impl};
 use std::collections::HashMap;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -138,7 +141,7 @@ async fn worker() -> Result<()> {
         let stats = match monitor.current().await {
             Ok(stats) => stats,
             Err(e) => {
-                eprintln!("{e}");
+                warn!("Failed to get current status: {e}");
                 continue;
             }
         };
@@ -147,7 +150,7 @@ async fn worker() -> Result<()> {
             let stat = match stat {
                 Ok(stat) => stat,
                 Err(e) => {
-                    eprintln!("{e}");
+                    warn!("Failed to get interface status: {e}");
                     continue;
                 }
             };
@@ -167,10 +170,13 @@ async fn worker() -> Result<()> {
         hist_out.push_diff(diff_out);
 
         let medium = hist_in.moving_average(MA_LENGTH) + hist_out.moving_average(MA_LENGTH);
+        debug!("{medium:.0} B/s");
         if medium < NET_THRESHOLD && assertion.is_some() {
             assertion = None;
+            info!("Assertion taken");
         } else if NET_THRESHOLD <= medium && assertion.is_none() {
             assertion = Some(inhibitor.inhibit().await);
+            info!("Assertion released");
         }
     }
 }

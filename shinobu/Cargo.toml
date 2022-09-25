@@ -13,7 +13,9 @@ anyhow = "1.0.58"
 cocoa = "0.24.0"
 core-foundation = "0.9.3"
 core-foundation-sys = "0.8.3"
+env_logger = { version = "0.9.1", default-features = false, features = ["humantime"] }
 futures = { version = "0.3.21", default-features = false, features = ["std"] }
 libc = "0.2.126"
+log = "0.4.17"
 objc = "0.2.7"
 tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "time"] }
