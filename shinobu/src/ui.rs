@@ -4,13 +4,10 @@ use cocoa::appkit::{
 };
 use cocoa::base::{id, nil, selector};
 use cocoa::foundation::NSString;
-use core_foundation::base::TCFType;
-use core_foundation::string::CFString;
-use core_foundation_sys::base::Boolean;
-use core_foundation_sys::string::CFStringRef;
 use objc::rc::autoreleasepool;
 use objc::runtime::{objc_retain, Object, Sel, BOOL, NO, YES};
 use objc::{class, msg_send, sel, sel_impl};
+use std::ptr::null_mut;
 
 pub(super) fn main() {
     autoreleasepool(|| unsafe {
@@ -76,23 +73,29 @@ extern "C" fn validate_menu_item(_: &mut Object, _: Sel, item: id) -> BOOL {
 }
 
 extern "C" fn toggle_launch_at_login(_: &mut Object, _: Sel, _: id) {
-    #[link(name = "ServiceManagement", kind = "framework")]
-    extern "system" {
-        fn SMLoginItemSetEnabled(identifier: CFStringRef, enabled: Boolean) -> Boolean;
-    }
-
     unsafe {
         let user_defaults: id = msg_send![class!(NSUserDefaults), standardUserDefaults];
         let key = NSString::alloc(nil).init_str("launchAtLogin");
         let enabled: BOOL = msg_send![user_defaults, boolForKey: key];
 
-        let identifier = CFString::from_static_string("org.dacci.shinobu.launcher");
-        let new_value = match enabled {
-            NO => 1,
-            _ => 0,
+        let identifier = NSString::alloc(nil).init_str("org.dacci.shinobu.launcher");
+        let service: id = msg_send![
+            class!(SMAppService),
+            loginItemServiceWithIdentifier: identifier
+        ];
+
+        let succeeded: BOOL = if enabled == NO {
+            msg_send![service, registerAndReturnError: null_mut::<id>()]
+        } else {
+            msg_send![service, unregisterAndReturnError: null_mut::<id>()]
         };
-        if SMLoginItemSetEnabled(identifier.as_concrete_TypeRef(), new_value) == 1 {
-            let _: () = msg_send![user_defaults, setBool:!enabled forKey:key];
+
+        if succeeded != NO {
+            let new_value = match enabled {
+                NO => YES,
+                _ => NO,
+            };
+            let _: () = msg_send![user_defaults, setBool:new_value forKey:key];
         }
     }
 }
