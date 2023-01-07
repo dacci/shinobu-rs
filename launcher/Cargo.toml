@@ -9,5 +9,5 @@ name = "Launcher"
 identifier = "org.dacci.shinobu.launcher"
 
 [dependencies]
-cocoa = "0.24.0"
+cocoa = "0.24.1"
 objc = "0.2.7"
