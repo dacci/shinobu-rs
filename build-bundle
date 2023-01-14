@@ -3,7 +3,7 @@
 set -euo pipefail
 
 main() {
-  CARGO_OPTS=(bundle)
+  CARGO_OPTS=(--target aarch64-apple-darwin --target x86_64-apple-darwin)
   PROFILE=debug
 
   while getopts r OPT; do
@@ -15,15 +15,19 @@ main() {
     esac
   done
 
-  for PKG in shinobu launcher; do
-    cd $PKG
-    cargo "${CARGO_OPTS[@]}"
-    cd ..
-  done
+  cargo build "${CARGO_OPTS[@]}"
 
-  cd target/$PROFILE/bundle/osx/Shinobu.app
-  mkdir -p Contents/Library/LoginItems
-  mv ../Launcher.app Contents/Library/LoginItems
+  for arch in aarch64 x86_64; do
+    pushd target/$arch-apple-darwin/$PROFILE >/dev/null
+
+    [[ -d Shinobu.app ]] && rm -rf Shinobu.app
+    mkdir -p Shinobu.app/Contents/MacOS
+
+    ln shinobu Shinobu.app/Contents/MacOS
+    ln ../../../Info.plist Shinobu.app/Contents
+
+    popd >/dev/null
+  done
 }
 
 [[ ${#BASH_SOURCE[@]} = 1 ]] && main "$@"
