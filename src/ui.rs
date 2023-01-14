@@ -78,11 +78,7 @@ extern "C" fn toggle_launch_at_login(_: &mut Object, _: Sel, _: id) {
         let key = NSString::alloc(nil).init_str("launchAtLogin");
         let enabled: BOOL = msg_send![user_defaults, boolForKey: key];
 
-        let identifier = NSString::alloc(nil).init_str("org.dacci.shinobu.launcher");
-        let service: id = msg_send![
-            class!(SMAppService),
-            loginItemServiceWithIdentifier: identifier
-        ];
+        let service: id = msg_send![class!(SMAppService), mainAppService];
 
         let succeeded: BOOL = if enabled == NO {
             msg_send![service, registerAndReturnError: null_mut::<id>()]
