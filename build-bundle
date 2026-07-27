@@ -5,29 +5,38 @@ set -euo pipefail
 main() {
   CARGO_OPTS=(--target aarch64-apple-darwin --target x86_64-apple-darwin)
   PROFILE=debug
+  AUTHORITY=""
 
-  while getopts r OPT; do
+  while getopts rs: OPT; do
     case $OPT in
       r)
         CARGO_OPTS+=(--release)
         PROFILE=release
         ;;
+
+      s)
+        AUTHORITY="$OPTARG"
+        ;;
+
+      ?)
+        exit -1
+        ;;
     esac
   done
+  shift $((OPTIND - 1))
 
   cargo build "${CARGO_OPTS[@]}"
 
-  for arch in aarch64 x86_64; do
-    pushd target/$arch-apple-darwin/$PROFILE >/dev/null
+  rm -rf target/$PROFILE/Shinobu.app
+  mkdir -p target/$PROFILE/Shinobu.app/Contents/MacOS
+  lipo \
+    -create target/*-apple-darwin/$PROFILE/shinobu \
+    -output target/$PROFILE/Shinobu.app/Contents/MacOS/shinobu
+  ln Info.plist target/$PROFILE/Shinobu.app/Contents
 
-    [[ -d Shinobu.app ]] && rm -rf Shinobu.app
-    mkdir -p Shinobu.app/Contents/MacOS
-
-    ln shinobu Shinobu.app/Contents/MacOS
-    ln ../../../Info.plist Shinobu.app/Contents
-
-    popd >/dev/null
-  done
+  if [[ -n "$AUTHORITY" ]]; then
+    codesign -s "$AUTHORITY" --timestamp target/$PROFILE/Shinobu.app
+  fi
 }
 
 [[ ${#BASH_SOURCE[@]} = 1 ]] && main "$@"
