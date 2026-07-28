@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Result};
-use core_foundation::base::TCFType;
-use core_foundation::string::CFString;
+use objc2_core_foundation::CFString;
+use objc2_io_kit::{IOPMAssertionCreateWithDescription, IOPMAssertionID, IOPMAssertionRelease};
+use std::io::{Error, Result};
 
 pub struct Inhibitor;
 
@@ -12,46 +12,37 @@ impl Inhibitor {
     pub async fn inhibit(&self) -> Result<Assertion> {
         let mut assertion_id = 0;
         let ret = unsafe {
-            iokit::IOPMAssertionCreateWithDescription(
-                CFString::from_static_string(iokit::kIOPMAssertionTypePreventUserIdleDisplaySleep)
-                    .as_concrete_TypeRef(),
-                CFString::from_static_string("Shinobu").as_concrete_TypeRef(),
-                CFString::from_static_string("System activity").as_concrete_TypeRef(),
-                CFString::from_static_string("Shinobu is preventing sleep.").as_concrete_TypeRef(),
-                CFString::from_static_string(iokit::kLocalizationBundlePath).as_concrete_TypeRef(),
+            IOPMAssertionCreateWithDescription(
+                Some(
+                    CFString::from_str(iokit::kIOPMAssertionTypePreventUserIdleDisplaySleep)
+                        .as_ref(),
+                ),
+                Some(CFString::from_str("Shinobu").as_ref()),
+                Some(CFString::from_str("System activity").as_ref()),
+                Some(CFString::from_str("Shinobu is preventing sleep.").as_ref()),
+                Some(CFString::from_str(iokit::kLocalizationBundlePath).as_ref()),
                 0.0,
-                CFString::from_static_string(iokit::kIOPMAssertionTimeoutActionRelease)
-                    .as_concrete_TypeRef(),
+                Some(CFString::from_str(iokit::kIOPMAssertionTimeoutActionRelease).as_ref()),
                 &mut assertion_id,
             )
         };
         match ret {
-            iokit::kIOReturnSuccess => Ok(Assertion(assertion_id)),
-            _ => Err(anyhow!(
-                "IOPMAssertionCreateWithDescription() failed: {ret}"
-            )),
+            0 => Ok(Assertion(assertion_id)),
+            code => Err(Error::from_raw_os_error(code)),
         }
     }
 }
 
-pub struct Assertion(iokit::IOPMAssertionID);
+pub struct Assertion(IOPMAssertionID);
 
 impl Drop for Assertion {
     fn drop(&mut self) {
-        unsafe { iokit::IOPMAssertionRelease(self.0) };
+        IOPMAssertionRelease(self.0);
     }
 }
 
 mod iokit {
     #![allow(unused, non_upper_case_globals)]
-
-    use core_foundation_sys::date::CFTimeInterval;
-    use core_foundation_sys::string::CFStringRef;
-
-    pub type IOReturn = i32;
-    pub type IOPMAssertionID = u32;
-
-    pub const kIOReturnSuccess: IOReturn = 0;
 
     pub const kIOPMAssertionTypePreventUserIdleSystemSleep: &str = "PreventUserIdleSystemSleep";
     pub const kIOPMAssertionTypePreventUserIdleDisplaySleep: &str = "PreventUserIdleDisplaySleep";
@@ -64,26 +55,10 @@ mod iokit {
     pub const kIOPMAssertionTimeoutActionLog: &str = "TimeoutActionLog";
     pub const kIOPMAssertionTimeoutActionTurnOff: &str = "TimeoutActionTurnOff";
     pub const kIOPMAssertionTimeoutActionRelease: &str = "TimeoutActionRelease";
-
-    #[link(name = "IOKit", kind = "framework")]
-    extern "C" {
-        pub fn IOPMAssertionCreateWithDescription(
-            AssertionType: CFStringRef,
-            Name: CFStringRef,
-            Details: CFStringRef,
-            HumanReadableReason: CFStringRef,
-            LocalizationBundlePath: CFStringRef,
-            Timeout: CFTimeInterval,
-            TimeoutAction: CFStringRef,
-            AssertionID: *mut IOPMAssertionID,
-        ) -> IOReturn;
-
-        pub fn IOPMAssertionRelease(AssertionID: IOPMAssertionID) -> IOReturn;
-    }
 }
 
 pub mod net {
-    use futures::{stream, Stream, StreamExt};
+    use futures::{Stream, StreamExt, stream};
     use std::io::{Error, Result};
     use std::marker::PhantomData;
     use std::ptr::null_mut;
@@ -130,7 +105,7 @@ pub mod net {
             Ok(stream::iter(Routes {
                 buf,
                 pos: 0,
-                _a: PhantomData::default(),
+                _a: PhantomData,
             })
             .map(Stat::try_from))
         }
@@ -175,6 +150,7 @@ pub mod net {
         }
     }
 
+    #[allow(unused)]
     pub struct Stat {
         pub name: String,
         pub flags: u32,

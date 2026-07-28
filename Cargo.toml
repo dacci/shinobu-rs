@@ -1,7 +1,7 @@
 [package]
 name = "shinobu"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Shinobu"
 
 [package.metadata.bundle]
@@ -9,13 +9,15 @@ name = "Shinobu"
 identifier = "org.dacci.shinobu"
 
 [dependencies]
-anyhow = "1.0.98"
-cocoa = "0.26.0"
-core-foundation = "0.10.0"
-core-foundation-sys = "0.8.7"
-env_logger = { version = "0.11.8", default-features = false, features = ["humantime"] }
-futures = { version = "0.3.31", default-features = false, features = ["std"] }
-libc = "0.2.172"
-log = "0.4.27"
-objc = "0.2.7"
-tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread", "sync", "time"] }
+anyhow = "1.0.104"
+env_logger = { version = "0.11.11", default-features = false, features = ["humantime"] }
+futures = { version = "0.3.33", default-features = false, features = ["std"] }
+libc = "0.2.189"
+log = "0.4.33"
+objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-core-foundation = "0.3.2"
+objc2-foundation = "0.3.2"
+objc2-io-kit = "0.3.2"
+objc2-service-management = "0.3.2"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
