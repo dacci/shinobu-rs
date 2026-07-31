@@ -2,19 +2,19 @@ mod monitor;
 mod sys;
 mod ui;
 
-use anyhow::Result;
+use objc2::MainThreadMarker;
+use objc2::runtime::ProtocolObject;
+use objc2_app_kit::NSApplication;
 
-fn main() -> Result<()> {
+fn main() {
     env_logger::init();
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let monitor = std::thread::spawn(|| monitor::main(rx));
+    let mtm = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
 
-    ui::main();
+    let delegate = ui::AppDelegate::new(mtm);
+    let object = ProtocolObject::from_ref(&*delegate);
+    app.setDelegate(Some(object));
 
-    if tx.send(()).is_ok() {
-        let _ = monitor.join();
-    }
-
-    Ok(())
+    app.run();
 }

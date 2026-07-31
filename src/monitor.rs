@@ -1,55 +1,59 @@
 use crate::sys;
-use anyhow::Result;
-use futures::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use std::time::Duration;
-use tokio::time::{MissedTickBehavior, interval};
+use std::sync::mpsc::{Receiver, Sender, channel};
+use std::thread::JoinHandle;
 
 const NET_THRESHOLD: f64 = 50.0 * 1024.0;
 const MA_LENGTH: usize = 300;
 
-pub(super) fn main(signal: tokio::sync::oneshot::Receiver<()>) {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            tokio::select! {
-                _ = signal => {},
-                _ = async_main() => {},
-            }
-        })
+enum MonitorCommand {
+    Tick,
 }
 
-async fn async_main() -> Result<()> {
-    let inhibitor = sys::Inhibitor::new().await?;
-    let mut assertion = None;
+struct MonitorStat {
+    channel: Receiver<MonitorCommand>,
+    inhibitor: sys::Inhibitor,
+    assertion: Option<sys::Assertion>,
+    monitor: sys::net::Monitor,
+    if_hist: HashMap<String, (Historical, Historical)>,
+    hist_in: Historical,
+    hist_out: Historical,
+}
 
-    let monitor = sys::net::Monitor::new().await?;
+impl MonitorStat {
+    fn new(channel: Receiver<MonitorCommand>) -> Self {
+        Self {
+            channel,
+            inhibitor: sys::Inhibitor::new(),
+            assertion: None,
+            monitor: sys::net::Monitor::new(),
+            if_hist: HashMap::new(),
+            hist_in: Historical::new(),
+            hist_out: Historical::new(),
+        }
+    }
 
-    let mut if_hist = HashMap::new();
-    let mut hist_in = Historical::new();
-    let mut hist_out = Historical::new();
+    fn run(mut self) {
+        while let Ok(cmd) = self.channel.recv() {
+            match cmd {
+                MonitorCommand::Tick => self.tick(),
+            }
+        }
+    }
 
-    let mut interval = interval(Duration::from_secs(1));
-    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-    loop {
-        interval.tick().await;
-
+    fn tick(&mut self) {
         let mut diff_in = 0;
         let mut diff_out = 0;
 
-        let stats = match monitor.current().await {
+        let stats = match self.monitor.current() {
             Ok(stats) => stats,
             Err(e) => {
                 warn!("Failed to get current status: {e}");
-                continue;
+                return;
             }
         };
-        tokio::pin!(stats);
-        while let Some(stat) = stats.next().await {
+        for stat in stats {
             let stat = match stat {
                 Ok(stat) => stat,
                 Err(e) => {
@@ -58,7 +62,8 @@ async fn async_main() -> Result<()> {
                 }
             };
 
-            let (hist_in, hist_out) = if_hist
+            let (hist_in, hist_out) = self
+                .if_hist
                 .entry(stat.name)
                 .or_insert_with_key(|_| (Historical::new(), Historical::new()));
             if let Some(diff) = hist_in.push(stat.in_bytes) {
@@ -69,18 +74,58 @@ async fn async_main() -> Result<()> {
             }
         }
 
-        hist_in.push_diff(diff_in);
-        hist_out.push_diff(diff_out);
+        self.hist_in.push_diff(diff_in);
+        self.hist_out.push_diff(diff_out);
 
-        let medium = hist_in.moving_average(MA_LENGTH) + hist_out.moving_average(MA_LENGTH);
+        let medium =
+            self.hist_in.moving_average(MA_LENGTH) + self.hist_out.moving_average(MA_LENGTH);
         debug!("{medium:.0} B/s");
-        if medium < NET_THRESHOLD && assertion.is_some() {
-            assertion = None;
-            info!("Assertion taken");
-        } else if NET_THRESHOLD <= medium && assertion.is_none() {
-            assertion = Some(inhibitor.inhibit().await);
+        if medium < NET_THRESHOLD && self.assertion.is_some() {
+            self.assertion = None;
             info!("Assertion released");
+        } else if NET_THRESHOLD <= medium && self.assertion.is_none() {
+            match self.inhibitor.inhibit() {
+                Ok(assertion) => {
+                    self.assertion = Some(assertion);
+                    info!("Assertion taken");
+                }
+                Err(e) => error!("Failed to inhibit: {e}"),
+            }
         }
+    }
+}
+
+pub struct Monitor {
+    channel: Option<Sender<MonitorCommand>>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl Monitor {
+    pub fn new() -> Self {
+        let (tx, rx) = channel();
+
+        let stat = MonitorStat::new(rx);
+        let handle = std::thread::spawn(move || stat.run());
+
+        Self {
+            channel: Some(tx),
+            handle: Some(handle),
+        }
+    }
+
+    pub fn tick(&self) {
+        self.channel
+            .as_ref()
+            .unwrap()
+            .send(MonitorCommand::Tick)
+            .unwrap();
+    }
+}
+
+impl Drop for Monitor {
+    fn drop(&mut self) {
+        self.channel.take().unwrap();
+        self.handle.take().unwrap().join().unwrap();
     }
 }
 

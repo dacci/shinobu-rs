@@ -5,11 +5,11 @@ use std::io::{Error, Result};
 pub struct Inhibitor;
 
 impl Inhibitor {
-    pub async fn new() -> Result<Self> {
-        Ok(Self)
+    pub fn new() -> Self {
+        Self
     }
 
-    pub async fn inhibit(&self) -> Result<Assertion> {
+    pub fn inhibit(&self) -> Result<Assertion> {
         let mut assertion_id = 0;
         let ret = unsafe {
             IOPMAssertionCreateWithDescription(
@@ -58,7 +58,6 @@ mod iokit {
 }
 
 pub mod net {
-    use futures::{Stream, StreamExt, stream};
     use std::io::{Error, Result};
     use std::marker::PhantomData;
     use std::ptr::null_mut;
@@ -66,11 +65,11 @@ pub mod net {
     pub struct Monitor;
 
     impl Monitor {
-        pub async fn new() -> Result<Self> {
-            Ok(Self)
+        pub fn new() -> Self {
+            Self
         }
 
-        pub async fn current(&self) -> Result<impl Stream<Item = Result<Stat>>> {
+        pub fn current(&self) -> Result<impl Iterator<Item = Result<Stat>>> {
             let mut name = [libc::CTL_NET, libc::PF_ROUTE, 0, 0, libc::NET_RT_IFLIST2, 0];
             let mut needed = 0;
             let res = unsafe {
@@ -102,11 +101,11 @@ pub mod net {
                 return Err(Error::last_os_error());
             }
 
-            Ok(stream::iter(Routes {
+            Ok(Routes {
                 buf,
                 pos: 0,
                 _a: PhantomData,
-            })
+            }
             .map(Stat::try_from))
         }
     }
@@ -184,10 +183,10 @@ pub mod net {
     }
 
     #[cfg(test)]
-    #[tokio::test]
-    async fn test_monitor() {
-        let mon = Monitor::new().await.unwrap();
-        let mut stats = mon.current().await.unwrap();
-        stats.next().await.unwrap().unwrap();
+    #[test]
+    fn test_monitor() {
+        let mon = Monitor::new();
+        let mut stats = mon.current().unwrap();
+        stats.next().unwrap().unwrap();
     }
 }

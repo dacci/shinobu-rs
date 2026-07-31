@@ -1,42 +1,46 @@
+use crate::monitor::Monitor;
 use objc2::rc::Retained;
-use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2::runtime::NSObjectProtocol;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAlert, NSAlertStyle, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
     NSControlStateValueOff, NSControlStateValueOn, NSMenu, NSMenuItem, NSMenuItemValidation,
     NSSquareStatusItemLength, NSStatusBar, NSStatusItem,
 };
-use objc2_foundation::{NSNotification, NSObject, NSUserDefaults, ns_string};
+use objc2_foundation::{NSNotification, NSObject, NSTimer, NSUserDefaults, ns_string};
 use objc2_service_management::SMAppService;
 use std::cell::RefCell;
 
-pub(super) fn main() {
-    let mtm = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
-
-    let delegate = AppDelegate::new(mtm);
-    let object = ProtocolObject::from_ref(&*delegate);
-    app.setDelegate(Some(object));
-
-    app.run();
-}
-
 #[derive(Default)]
-struct AppDelegateIvar {
-    status_item: RefCell<Retained<NSStatusItem>>,
+pub struct AppDelegateIvar {
+    monitor: RefCell<Option<Monitor>>,
+    status_item: RefCell<Option<Retained<NSStatusItem>>>,
 }
 
 define_class!(
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
     #[ivars = AppDelegateIvar]
-    struct AppDelegate;
+    pub struct AppDelegate;
 
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, notification: &NSNotification) {
+            let monitor = Monitor::new();
+            self.ivars().monitor.replace(Some(monitor));
+
+            unsafe {
+                NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                    1.0,
+                    self,
+                    sel!(timerFired:),
+                    None,
+                    true,
+                )
+            };
+
             let status_menu = NSMenu::new(self.mtm());
             unsafe {
                 status_menu.addItemWithTitle_action_keyEquivalent(
@@ -58,7 +62,7 @@ define_class!(
                 .unwrap()
                 .setTitle(ns_string!("忍"));
             status_item.setMenu(Some(status_menu.as_ref()));
-            self.ivars().status_item.replace(status_item);
+            self.ivars().status_item.replace(Some(status_item));
 
             let app = notification
                 .object()
@@ -116,11 +120,16 @@ define_class!(
                 }
             }
         }
+
+        #[unsafe(method(timerFired:))]
+        fn timer_fired(&self, _: &NSTimer) {
+            self.ivars().monitor.borrow().as_ref().unwrap().tick();
+        }
     }
 );
 
 impl AppDelegate {
-    fn new(mtm: MainThreadMarker) -> Retained<Self> {
+    pub fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(<_>::default());
         unsafe { msg_send![super(this), init] }
     }
