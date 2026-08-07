@@ -28,5 +28,9 @@
 	<true/>
 	<key>LSMinimumSystemVersion</key>
 	<string>13</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 </dict>
 </plist>

@@ -27,15 +27,25 @@ main() {
 
   cargo build "${CARGO_OPTS[@]}"
 
-  rm -rf target/$PROFILE/Shinobu.app
-  mkdir -p target/$PROFILE/Shinobu.app/Contents/MacOS
+  BUNDLE=target/$PROFILE/Shinobu.app
+  rm -rf $BUNDLE
+
+  mkdir -p $BUNDLE/Contents/MacOS
   lipo \
     -create target/*-apple-darwin/$PROFILE/shinobu \
-    -output target/$PROFILE/Shinobu.app/Contents/MacOS/shinobu
-  ln Info.plist target/$PROFILE/Shinobu.app/Contents
+    -output $BUNDLE/Contents/MacOS/shinobu
+  cp Info.plist $BUNDLE/Contents
+
+  if [[ -d AppIcon.iconset ]]; then
+    mkdir -p $BUNDLE/Contents/Resources
+    iconutil \
+      -c icns \
+      -o $BUNDLE/Contents/Resources/AppIcon.icns \
+      AppIcon.iconset
+  fi
 
   if [[ -n "$AUTHORITY" ]]; then
-    codesign -s "$AUTHORITY" --timestamp target/$PROFILE/Shinobu.app
+    codesign -s "$AUTHORITY" --timestamp $BUNDLE
   fi
 }
 
