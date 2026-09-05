@@ -9,6 +9,7 @@ const MA_LENGTH: usize = 300;
 
 enum MonitorCommand {
     Tick,
+    SetPreventDisplaySleep(bool),
 }
 
 struct MonitorStat {
@@ -19,6 +20,7 @@ struct MonitorStat {
     if_hist: HashMap<String, (Historical, Historical)>,
     hist_in: Historical,
     hist_out: Historical,
+    prevent_display_sleep: bool,
 }
 
 impl MonitorStat {
@@ -31,6 +33,7 @@ impl MonitorStat {
             if_hist: HashMap::new(),
             hist_in: Historical::new(),
             hist_out: Historical::new(),
+            prevent_display_sleep: false,
         }
     }
 
@@ -38,6 +41,9 @@ impl MonitorStat {
         while let Ok(cmd) = self.channel.recv() {
             match cmd {
                 MonitorCommand::Tick => self.tick(),
+                MonitorCommand::SetPreventDisplaySleep(keep) => {
+                    self.set_prevent_display_sleep(keep)
+                }
             }
         }
     }
@@ -84,10 +90,22 @@ impl MonitorStat {
             self.assertion = None;
             info!("Assertion released");
         } else if NET_THRESHOLD <= medium && self.assertion.is_none() {
-            match self.inhibitor.inhibit() {
+            match self.inhibitor.inhibit(self.prevent_display_sleep) {
                 Ok(assertion) => {
                     self.assertion = Some(assertion);
                     info!("Assertion taken");
+                }
+                Err(e) => error!("Failed to inhibit: {e}"),
+            }
+        }
+    }
+
+    fn set_prevent_display_sleep(&mut self, prevent: bool) {
+        self.prevent_display_sleep = prevent;
+        if self.assertion.is_some() {
+            match self.inhibitor.inhibit(self.prevent_display_sleep) {
+                Ok(assertion) => {
+                    self.assertion.replace(assertion);
                 }
                 Err(e) => error!("Failed to inhibit: {e}"),
             }
@@ -118,6 +136,14 @@ impl Monitor {
             .as_ref()
             .unwrap()
             .send(MonitorCommand::Tick)
+            .unwrap();
+    }
+
+    pub fn set_prevent_display_sleep(&self, keep: bool) {
+        self.channel
+            .as_ref()
+            .unwrap()
+            .send(MonitorCommand::SetPreventDisplaySleep(keep))
             .unwrap();
     }
 }

@@ -28,7 +28,10 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, notification: &NSNotification) {
+            let defaults = NSUserDefaults::standardUserDefaults();
+
             let monitor = Monitor::new();
+            monitor.set_prevent_display_sleep(defaults.boolForKey(ns_string!("preventDisplaySleep")));
             self.ivars().monitor.replace(Some(monitor));
 
             unsafe {
@@ -49,8 +52,14 @@ define_class!(
                     ns_string!(""),
                 );
                 status_menu.addItemWithTitle_action_keyEquivalent(
+                    ns_string!("Prevent display sleep"),
+                    Some(sel!(togglePreventDisplaySleep:)),
+                    ns_string!(""),
+                );
+                status_menu.addItem(NSMenuItem::separatorItem(self.mtm()).as_ref());
+                status_menu.addItemWithTitle_action_keyEquivalent(
                     ns_string!("Quit Shinobu"),
-                    Some(sel!(stop:)),
+                    Some(sel!(terminate:)),
                     ns_string!(""),
                 );
             }
@@ -78,17 +87,27 @@ define_class!(
         fn validate_menu_item(&self, item: &NSMenuItem) -> bool {
             let Some(action) = item.action() else { return false.into() };
 
+            let defaults = NSUserDefaults::standardUserDefaults();
+
             if action.name() == c"toggleLaunchAtLogin:" {
-                let defaults = NSUserDefaults::standardUserDefaults();
                 let state = if defaults.boolForKey(ns_string!("launchAtLogin")) {
                     NSControlStateValueOn
                 } else {
                     NSControlStateValueOff
                 };
                 item.setState(state);
+                true
+            } else if action.name() == c"togglePreventDisplaySleep:" {
+                let state = if defaults.boolForKey(ns_string!("preventDisplaySleep")) {
+                    NSControlStateValueOn
+                } else {
+                    NSControlStateValueOff
+                };
+                item.setState(state);
+                true
+            } else {
+                false
             }
-
-            true
         }
     }
 
@@ -119,6 +138,22 @@ define_class!(
                     alert.runModal();
                 }
             }
+        }
+
+        #[unsafe(method(togglePreventDisplaySleep:))]
+        fn toggle_prevent_display_sleep(&self, _: &NSNotification) {
+            let user_defaults = NSUserDefaults::standardUserDefaults();
+
+            let key = ns_string!("preventDisplaySleep");
+            let enabled = user_defaults.boolForKey(key);
+            user_defaults.setBool_forKey(!enabled, key);
+
+            self.ivars()
+                .monitor
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .set_prevent_display_sleep(!enabled);
         }
 
         #[unsafe(method(timerFired:))]

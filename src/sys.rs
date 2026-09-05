@@ -9,13 +9,17 @@ impl Inhibitor {
         Self
     }
 
-    pub fn inhibit(&self) -> Result<Assertion> {
+    pub fn inhibit(&self, prevent_display_sleep: bool) -> Result<Assertion> {
         let mut assertion_id = 0;
         let ret = unsafe {
             IOPMAssertionCreateWithDescription(
                 Some(
-                    CFString::from_str(iokit::kIOPMAssertionTypePreventUserIdleDisplaySleep)
-                        .as_ref(),
+                    CFString::from_str(if prevent_display_sleep {
+                        iokit::kIOPMAssertionTypePreventUserIdleDisplaySleep
+                    } else {
+                        iokit::kIOPMAssertionTypePreventUserIdleSystemSleep
+                    })
+                    .as_ref(),
                 ),
                 Some(CFString::from_str("Shinobu").as_ref()),
                 Some(CFString::from_str("System activity").as_ref()),
