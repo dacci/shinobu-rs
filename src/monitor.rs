@@ -1,4 +1,5 @@
 use crate::sys;
+use inhibitor::{Assertion, Inhibitor};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -14,26 +15,24 @@ enum MonitorCommand {
 
 struct MonitorStat {
     channel: Receiver<MonitorCommand>,
-    inhibitor: sys::Inhibitor,
-    assertion: Option<sys::Assertion>,
+    inhibitor: Inhibitor,
+    assertion: Option<Assertion>,
     monitor: sys::net::Monitor,
     if_hist: HashMap<String, (Historical, Historical)>,
     hist_in: Historical,
     hist_out: Historical,
-    prevent_display_sleep: bool,
 }
 
 impl MonitorStat {
     fn new(channel: Receiver<MonitorCommand>) -> Self {
         Self {
             channel,
-            inhibitor: sys::Inhibitor::new(),
+            inhibitor: Inhibitor::new(),
             assertion: None,
             monitor: sys::net::Monitor::new(),
             if_hist: HashMap::new(),
             hist_in: Historical::new(),
             hist_out: Historical::new(),
-            prevent_display_sleep: false,
         }
     }
 
@@ -41,8 +40,8 @@ impl MonitorStat {
         while let Ok(cmd) = self.channel.recv() {
             match cmd {
                 MonitorCommand::Tick => self.tick(),
-                MonitorCommand::SetPreventDisplaySleep(keep) => {
-                    self.set_prevent_display_sleep(keep)
+                MonitorCommand::SetPreventDisplaySleep(prevent) => {
+                    self.set_prevent_display_sleep(prevent)
                 }
             }
         }
@@ -90,7 +89,7 @@ impl MonitorStat {
             self.assertion = None;
             info!("Assertion released");
         } else if NET_THRESHOLD <= medium && self.assertion.is_none() {
-            match self.inhibitor.inhibit(self.prevent_display_sleep) {
+            match self.inhibitor.inhibit() {
                 Ok(assertion) => {
                     self.assertion = Some(assertion);
                     info!("Assertion taken");
@@ -101,9 +100,9 @@ impl MonitorStat {
     }
 
     fn set_prevent_display_sleep(&mut self, prevent: bool) {
-        self.prevent_display_sleep = prevent;
+        self.inhibitor.set_require_display(prevent);
         if self.assertion.is_some() {
-            match self.inhibitor.inhibit(self.prevent_display_sleep) {
+            match self.inhibitor.inhibit() {
                 Ok(assertion) => {
                     self.assertion.replace(assertion);
                 }
