@@ -1,19 +1,20 @@
+#![windows_subsystem = "windows"]
+
 mod monitor;
-mod ui;
 
-use objc2::MainThreadMarker;
-use objc2::runtime::ProtocolObject;
-use objc2_app_kit::NSApplication;
+#[cfg(target_os = "macos")]
+mod macos;
 
-fn main() {
+#[cfg(target_os = "windows")]
+mod windows;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let mtm = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    cfg_select! {
+        target_os = "macos" => macos::main()?,
+        target_os = "windows" => windows::main()?,
+    }
 
-    let delegate = ui::AppDelegate::new(mtm);
-    let object = ProtocolObject::from_ref(&*delegate);
-    app.setDelegate(Some(object));
-
-    app.run();
+    Ok(())
 }

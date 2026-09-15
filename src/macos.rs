@@ -1,6 +1,6 @@
 use crate::monitor::Monitor;
 use objc2::rc::Retained;
-use objc2::runtime::NSObjectProtocol;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAlert, NSAlertStyle, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
@@ -10,6 +10,19 @@ use objc2_app_kit::{
 use objc2_foundation::{NSNotification, NSObject, NSTimer, NSUserDefaults, ns_string};
 use objc2_service_management::SMAppService;
 use std::cell::RefCell;
+
+pub fn main() -> Result<(), std::convert::Infallible> {
+    let mtm = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+
+    let delegate = AppDelegate::new(mtm);
+    let object = ProtocolObject::from_ref(&*delegate);
+    app.setDelegate(Some(object));
+
+    app.run();
+
+    Ok(())
+}
 
 #[derive(Default)]
 pub struct AppDelegateIvar {

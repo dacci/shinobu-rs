@@ -14,10 +14,18 @@ identifier = "org.dacci.shinobu"
 [dependencies]
 env_logger = { version = "0.11.11", default-features = false, features = ["humantime"] }
 inhibitor = { version = "0.1.0", path = "inhibitor" }
-libc = "0.2.189"
 log = "0.4.33"
 monitor = { version = "0.1.0", path = "monitor" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
 objc2-service-management = "0.3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-registry = "0.100.0"
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+embed-resource = "3.0.11"

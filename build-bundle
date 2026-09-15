@@ -34,7 +34,7 @@ main() {
   lipo \
     -create target/*-apple-darwin/$PROFILE/shinobu \
     -output $BUNDLE/Contents/MacOS/shinobu
-  cp Info.plist $BUNDLE/Contents
+  cp res/Info.plist $BUNDLE/Contents
 
   if [[ -d AppIcon.iconset ]]; then
     mkdir -p $BUNDLE/Contents/Resources
