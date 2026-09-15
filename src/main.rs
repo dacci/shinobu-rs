@@ -1,5 +1,4 @@
 mod monitor;
-mod sys;
 mod ui;
 
 use objc2::MainThreadMarker;

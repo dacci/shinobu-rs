@@ -1,5 +1,5 @@
 [workspace]
-members = ["inhibitor"]
+members = ["inhibitor", "monitor"]
 
 [package]
 name = "shinobu"
@@ -16,6 +16,7 @@ env_logger = { version = "0.11.11", default-features = false, features = ["human
 inhibitor = { version = "0.1.0", path = "inhibitor" }
 libc = "0.2.189"
 log = "0.4.33"
+monitor = { version = "0.1.0", path = "monitor" }
 objc2 = "0.6.4"
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"

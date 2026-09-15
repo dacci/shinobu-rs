@@ -1,7 +1,7 @@
-use crate::sys;
 use inhibitor::{Assertion, Inhibitor};
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use monitor::{Historical, net::TrafficMonitor};
+use std::io::Result;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::JoinHandle;
 
@@ -17,23 +17,22 @@ struct MonitorStat {
     channel: Receiver<MonitorCommand>,
     inhibitor: Inhibitor,
     assertion: Option<Assertion>,
-    monitor: sys::net::Monitor,
-    if_hist: HashMap<String, (Historical, Historical)>,
+    monitor: TrafficMonitor,
     hist_in: Historical,
     hist_out: Historical,
 }
 
 impl MonitorStat {
-    fn new(channel: Receiver<MonitorCommand>) -> Self {
-        Self {
+    fn new(channel: Receiver<MonitorCommand>) -> Result<Self> {
+        let monitor = TrafficMonitor::new()?;
+        Ok(Self {
             channel,
             inhibitor: Inhibitor::new(),
             assertion: None,
-            monitor: sys::net::Monitor::new(),
-            if_hist: HashMap::new(),
-            hist_in: Historical::new(),
-            hist_out: Historical::new(),
-        }
+            monitor,
+            hist_in: Historical::default(),
+            hist_out: Historical::default(),
+        })
     }
 
     fn run(mut self) {
@@ -48,39 +47,16 @@ impl MonitorStat {
     }
 
     fn tick(&mut self) {
-        let mut diff_in = 0;
-        let mut diff_out = 0;
-
-        let stats = match self.monitor.current() {
-            Ok(stats) => stats,
+        match self.monitor.collect() {
+            Ok(stats) => {
+                self.hist_in.push(stats.in_bytes);
+                self.hist_out.push(stats.out_bytes);
+            }
             Err(e) => {
                 warn!("Failed to get current status: {e}");
                 return;
             }
         };
-        for stat in stats {
-            let stat = match stat {
-                Ok(stat) => stat,
-                Err(e) => {
-                    warn!("Failed to get interface status: {e}");
-                    continue;
-                }
-            };
-
-            let (hist_in, hist_out) = self
-                .if_hist
-                .entry(stat.name)
-                .or_insert_with_key(|_| (Historical::new(), Historical::new()));
-            if let Some(diff) = hist_in.push(stat.in_bytes) {
-                diff_in += diff;
-            }
-            if let Some(diff) = hist_out.push(stat.out_bytes) {
-                diff_out += diff;
-            }
-        }
-
-        self.hist_in.push_diff(diff_in);
-        self.hist_out.push_diff(diff_out);
 
         let medium =
             self.hist_in.moving_average(MA_LENGTH) + self.hist_out.moving_average(MA_LENGTH);
@@ -118,16 +94,16 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         let (tx, rx) = channel();
 
-        let stat = MonitorStat::new(rx);
+        let stat = MonitorStat::new(rx)?;
         let handle = std::thread::spawn(move || stat.run());
 
-        Self {
+        Ok(Self {
             channel: Some(tx),
             handle: Some(handle),
-        }
+        })
     }
 
     pub fn tick(&self) {
@@ -152,70 +128,4 @@ impl Drop for Monitor {
         self.channel.take().unwrap();
         self.handle.take().unwrap().join().unwrap();
     }
-}
-
-struct Historical {
-    last: Option<u64>,
-    hist: [u64; 900],
-    pos: usize,
-    len: usize,
-}
-
-impl Historical {
-    fn new() -> Self {
-        Self {
-            last: None,
-            hist: [0; 900],
-            pos: 0,
-            len: 0,
-        }
-    }
-
-    fn push(&mut self, val: u64) -> Option<u64> {
-        if let Some(last) = self.last.replace(val) {
-            let diff = val.wrapping_sub(last);
-            self.push_diff(diff);
-            Some(diff)
-        } else {
-            None
-        }
-    }
-
-    fn push_diff(&mut self, diff: u64) {
-        self.pos = self.pos.wrapping_sub(1).min(self.hist.len() - 1);
-        self.hist[self.pos] = diff;
-        self.len = (self.len + 1).min(self.hist.len());
-    }
-
-    fn take(&self, len: usize) -> impl Iterator<Item = &u64> {
-        self.hist[self.pos..]
-            .iter()
-            .chain(self.hist[..self.pos].iter())
-            .take(len.min(self.len))
-    }
-
-    fn moving_average(&self, len: usize) -> f64 {
-        let (sum, count) = self
-            .take(len)
-            .fold((0, 0usize), |(sum, count), val| (sum + val, count + 1));
-        sum as f64 / count as f64
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn test_historical() {
-    let mut hist = Historical::new();
-    assert!(hist.moving_average(60).is_nan());
-    assert_eq!(hist.push(0), None);
-    assert!(hist.moving_average(60).is_nan());
-    assert_eq!(hist.push(1), Some(1));
-    assert_eq!(hist.moving_average(60), 1.0);
-    assert_eq!(hist.push(3), Some(2));
-    assert_eq!(hist.moving_average(60), 1.5);
-
-    let mut take = hist.take(3);
-    assert_eq!(take.next(), Some(&2));
-    assert_eq!(take.next(), Some(&1));
-    assert_eq!(take.next(), None);
 }

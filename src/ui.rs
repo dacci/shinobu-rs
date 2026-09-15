@@ -30,7 +30,7 @@ define_class!(
         fn did_finish_launching(&self, notification: &NSNotification) {
             let defaults = NSUserDefaults::standardUserDefaults();
 
-            let monitor = Monitor::new();
+            let monitor = Monitor::new().expect("failed to create monitor");
             monitor.set_prevent_display_sleep(defaults.boolForKey(ns_string!("preventDisplaySleep")));
             self.ivars().monitor.replace(Some(monitor));
 
