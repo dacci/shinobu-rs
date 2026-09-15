@@ -12,10 +12,10 @@ name = "Shinobu"
 identifier = "org.dacci.shinobu"
 
 [dependencies]
-env_logger = { version = "0.11.11", default-features = false, features = ["humantime"] }
 inhibitor = { version = "0.1.0", path = "inhibitor" }
-log = "0.4.33"
 monitor = { version = "0.1.0", path = "monitor" }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"

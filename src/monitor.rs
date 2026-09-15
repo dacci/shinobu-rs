@@ -1,9 +1,9 @@
 use inhibitor::{Assertion, Inhibitor};
-use log::{debug, error, info, warn};
 use monitor::{Historical, net::TrafficMonitor};
 use std::io::Result;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::JoinHandle;
+use tracing::{debug, error, info, warn};
 
 const NET_THRESHOLD: f64 = 50.0 * 1024.0;
 const MA_LENGTH: usize = 300;

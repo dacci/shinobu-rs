@@ -1,7 +1,7 @@
 use crate::monitor::Monitor;
-use log::error;
 use std::pin::Pin;
 use std::sync::OnceLock;
+use tracing::error;
 use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, LRESULT, MAX_PATH, WPARAM};
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::Shell::*;
