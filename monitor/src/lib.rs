@@ -1,5 +1,8 @@
 pub mod net;
 
+#[cfg(target_os = "windows")]
+mod perf;
+
 pub struct Historical {
     hist: Vec<f64>,
     pos: usize,
